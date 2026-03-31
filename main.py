@@ -2,7 +2,10 @@
 
 import json
 import logging
+import logging.handlers
 import os
+import secrets
+import threading
 import time
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -10,20 +13,56 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-logger = logging.getLogger(__name__)
-
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
 DEFAULT_TTL_SECONDS: int = 4 * 60 * 60  # 4 hours
 STORE_FILE: str = os.environ.get("KV_STORE_FILE", "kv_store.json")
+LOG_DIR: str = os.environ.get("KV_LOG_DIR", "logs")
+LOG_BACKUP_COUNT: int = int(os.environ.get("KV_LOG_BACKUP_COUNT", "30"))
+
+# ---------------------------------------------------------------------------
+# Logging setup
+# ---------------------------------------------------------------------------
+
+
+def _setup_logging() -> None:
+    """Add a daily-rotating file handler to the root logger.
+
+    Rotates at midnight; keeps LOG_BACKUP_COUNT days of backups (default 30).
+    Rotated files are named kv_server.log.YYYY-MM-DD.
+    """
+    os.makedirs(LOG_DIR, exist_ok=True)
+    log_path = os.path.join(LOG_DIR, "kv_server.log")
+    handler = logging.handlers.TimedRotatingFileHandler(
+        log_path,
+        when="midnight",
+        interval=1,
+        backupCount=LOG_BACKUP_COUNT,
+        encoding="utf-8",
+        utc=False,
+    )
+    handler.suffix = "%Y-%m-%d"
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    )
+    root = logging.getLogger()
+    root.addHandler(handler)
+    if root.level == logging.NOTSET:
+        root.setLevel(logging.INFO)
+
+
+_setup_logging()
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # In-memory store  {key: {"value": str, "expires_at": float}}
 # ---------------------------------------------------------------------------
 
 _store: dict[str, dict] = {}
+_store_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -86,12 +125,12 @@ app = FastAPI(title="Local KV Server", lifespan=lifespan)
 
 
 class SaveRequest(BaseModel):
-    key: str
     value: str
     ttl_seconds: Optional[int] = None
 
 
 class SaveResponse(BaseModel):
+    key: str
     status: str
 
 
@@ -107,17 +146,24 @@ class RetrieveResponse(BaseModel):
 
 @app.post("/save_string", response_model=SaveResponse)
 def save_string(req: SaveRequest) -> SaveResponse:
-    """Store a string value under *key* with an optional TTL."""
-    _evict_expired()
+    """Store a string value, generate a unique key, and return it."""
     ttl = req.ttl_seconds if req.ttl_seconds is not None else DEFAULT_TTL_SECONDS
     if ttl <= 0:
         raise HTTPException(status_code=400, detail="ttl_seconds must be positive")
-    _store[req.key] = {
-        "value": req.value,
-        "expires_at": time.time() + ttl,
-    }
+    with _store_lock:
+        _evict_expired()
+        for _ in range(10):
+            key = secrets.token_urlsafe(8)
+            if key not in _store:
+                break
+        else:
+            raise HTTPException(status_code=503, detail="Could not generate a unique key")
+        _store[key] = {
+            "value": req.value,
+            "expires_at": time.time() + ttl,
+        }
     _save_store()
-    return SaveResponse(status="ok")
+    return SaveResponse(key=key, status="ok")
 
 
 @app.get("/retrieve_string", response_model=RetrieveResponse)

@@ -201,6 +201,10 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# KV server runtime files
+kv_server.pid
+logs/*.log
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
