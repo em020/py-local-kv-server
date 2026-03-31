@@ -1,10 +1,11 @@
 # py-local-kv-server
 
-A minimalist local key-value (KV) HTTP server built with [FastAPI](https://fastapi.tiangolo.com/). Store and retrieve string values by key over HTTP, with optional TTL-based expiry and automatic JSON persistence across restarts.
+A minimalist local key-value (KV) HTTP server built with [FastAPI](https://fastapi.tiangolo.com/). Store string values over HTTP and get back a server-generated short unique key to retrieve them later, with optional TTL-based expiry and automatic JSON persistence across restarts.
 
 ## Features
 
 - **Save & retrieve** string values via a simple REST API
+- **Server-generated keys** — the server returns a short unique ID on save; no need to supply your own key
 - **TTL support** — entries expire automatically (default: 4 hours)
 - **Persistence** — the store is saved to a JSON file and reloaded on startup (expired entries are skipped)
 - **Atomic writes** — the store file is updated atomically to avoid corruption
@@ -40,13 +41,12 @@ The interactive API docs are available at `http://127.0.0.1:8000/docs` once the 
 
 ### `POST /save_string`
 
-Store a string value under a key.
+Store a string value. The server generates and returns a unique short key.
 
 **Request body (JSON)**
 
 | Field         | Type    | Required | Description                                        |
 |---------------|---------|----------|----------------------------------------------------|
-| `key`         | string  | Yes      | The key to store the value under                   |
 | `value`       | string  | Yes      | The string value to store                          |
 | `ttl_seconds` | integer | No       | Time-to-live in seconds (default: 14400 / 4 hours) |
 
@@ -55,14 +55,16 @@ Store a string value under a key.
 ```bash
 curl -X POST http://127.0.0.1:8000/save_string \
   -H "Content-Type: application/json" \
-  -d '{"key": "greeting", "value": "hello", "ttl_seconds": 3600}'
+  -d '{"value": "hello", "ttl_seconds": 3600}'
 ```
 
 **Response**
 
 ```json
-{"status": "ok"}
+{"key": "aB3xQ7pLmNw", "status": "ok"}
 ```
+
+Use the returned `key` to retrieve the value later.
 
 ---
 
@@ -79,13 +81,13 @@ Retrieve the string value stored under a key.
 **Example**
 
 ```bash
-curl "http://127.0.0.1:8000/retrieve_string?key=greeting"
+curl "http://127.0.0.1:8000/retrieve_string?key=aB3xQ7pLmNw"
 ```
 
 **Response**
 
 ```json
-{"key": "greeting", "value": "hello"}
+{"key": "aB3xQ7pLmNw", "value": "hello"}
 ```
 
 Returns `404` if the key does not exist or has expired.

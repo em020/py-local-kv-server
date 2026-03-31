@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import secrets
 import time
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -86,12 +87,12 @@ app = FastAPI(title="Local KV Server", lifespan=lifespan)
 
 
 class SaveRequest(BaseModel):
-    key: str
     value: str
     ttl_seconds: Optional[int] = None
 
 
 class SaveResponse(BaseModel):
+    key: str
     status: str
 
 
@@ -107,17 +108,20 @@ class RetrieveResponse(BaseModel):
 
 @app.post("/save_string", response_model=SaveResponse)
 def save_string(req: SaveRequest) -> SaveResponse:
-    """Store a string value under *key* with an optional TTL."""
+    """Store a string value, generate a unique key, and return it."""
     _evict_expired()
     ttl = req.ttl_seconds if req.ttl_seconds is not None else DEFAULT_TTL_SECONDS
     if ttl <= 0:
         raise HTTPException(status_code=400, detail="ttl_seconds must be positive")
-    _store[req.key] = {
+    key = secrets.token_urlsafe(8)
+    while key in _store:
+        key = secrets.token_urlsafe(8)
+    _store[key] = {
         "value": req.value,
         "expires_at": time.time() + ttl,
     }
     _save_store()
-    return SaveResponse(status="ok")
+    return SaveResponse(key=key, status="ok")
 
 
 @app.get("/retrieve_string", response_model=RetrieveResponse)

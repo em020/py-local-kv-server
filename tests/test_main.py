@@ -39,38 +39,49 @@ def client():
 
 
 def test_save_string_returns_ok(client):
-    resp = client.post("/save_string", json={"key": "foo", "value": "bar"})
+    resp = client.post("/save_string", json={"value": "bar"})
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert isinstance(data["key"], str)
+    assert len(data["key"]) > 0
 
 
 def test_save_string_stores_value(client):
-    client.post("/save_string", json={"key": "hello", "value": "world"})
-    assert "hello" in _store
-    assert _store["hello"]["value"] == "world"
+    resp = client.post("/save_string", json={"value": "world"})
+    key = resp.json()["key"]
+    assert key in _store
+    assert _store[key]["value"] == "world"
 
 
 def test_save_string_custom_ttl(client):
-    client.post("/save_string", json={"key": "k", "value": "v", "ttl_seconds": 3600})
-    expires_at = _store["k"]["expires_at"]
+    resp = client.post("/save_string", json={"value": "v", "ttl_seconds": 3600})
+    key = resp.json()["key"]
+    expires_at = _store[key]["expires_at"]
     assert abs(expires_at - (time.time() + 3600)) < 2
 
 
 def test_save_string_default_ttl(client):
-    client.post("/save_string", json={"key": "k", "value": "v"})
-    expires_at = _store["k"]["expires_at"]
+    resp = client.post("/save_string", json={"value": "v"})
+    key = resp.json()["key"]
+    expires_at = _store[key]["expires_at"]
     assert abs(expires_at - (time.time() + DEFAULT_TTL_SECONDS)) < 2
 
 
 def test_save_string_invalid_ttl(client):
-    resp = client.post("/save_string", json={"key": "k", "value": "v", "ttl_seconds": 0})
+    resp = client.post("/save_string", json={"value": "v", "ttl_seconds": 0})
     assert resp.status_code == 400
 
 
-def test_save_string_overwrites_existing_key(client):
-    client.post("/save_string", json={"key": "dup", "value": "first"})
-    client.post("/save_string", json={"key": "dup", "value": "second"})
-    assert _store["dup"]["value"] == "second"
+def test_save_string_generates_unique_keys(client):
+    key1 = client.post("/save_string", json={"value": "a"}).json()["key"]
+    key2 = client.post("/save_string", json={"value": "b"}).json()["key"]
+    assert key1 != key2
+    # token_urlsafe(8) produces 11 URL-safe base64 characters
+    import re
+    pattern = re.compile(r'^[A-Za-z0-9_-]{11}$')
+    assert pattern.match(key1)
+    assert pattern.match(key2)
 
 
 # ---------------------------------------------------------------------------
@@ -79,10 +90,11 @@ def test_save_string_overwrites_existing_key(client):
 
 
 def test_retrieve_string_returns_value(client):
-    client.post("/save_string", json={"key": "msg", "value": "hello"})
-    resp = client.get("/retrieve_string", params={"key": "msg"})
+    resp = client.post("/save_string", json={"value": "hello"})
+    key = resp.json()["key"]
+    resp = client.get("/retrieve_string", params={"key": key})
     assert resp.status_code == 200
-    assert resp.json() == {"key": "msg", "value": "hello"}
+    assert resp.json() == {"key": key, "value": "hello"}
 
 
 def test_retrieve_string_missing_key_returns_404(client):
@@ -104,7 +116,8 @@ def test_retrieve_string_expired_key_returns_404(client):
 
 def test_persistence_survives_reload(client):
     """Saving a key and then re-loading the store file should restore the value."""
-    client.post("/save_string", json={"key": "persist", "value": "yes"})
+    resp = client.post("/save_string", json={"value": "yes"})
+    key = resp.json()["key"]
 
     # Simulate a restart by clearing memory and re-loading from disk
     _store.clear()
@@ -112,8 +125,8 @@ def test_persistence_survives_reload(client):
 
     _load_store()
 
-    assert "persist" in _store
-    assert _store["persist"]["value"] == "yes"
+    assert key in _store
+    assert _store[key]["value"] == "yes"
 
 
 def test_persistence_expired_entries_not_loaded():
