@@ -58,18 +58,21 @@ The interactive API docs are available at `http://127.0.0.1:8000/docs` once the 
 
 ## Logging
 
-Application logs are written to `logs/kv_server.log` inside the project directory. The `logs/` folder is created automatically on first run. The log destination can be changed via the `KV_LOG_DIR` environment variable.
+Application logs are written to `logs/kv_server.log` inside the project directory. The `logs/` folder is created automatically on first run.
+
+The log file **rotates daily at midnight**. Rotated files are kept for 30 days (e.g. `kv_server.log.2026-03-30`) and then deleted automatically. Both the destination directory and the retention period are configurable via environment variables.
 
 When using `start.sh`, uvicorn's own output (access logs, startup messages) is also appended to the same file.
 
 ## Configuration
 
-| Environment variable | Default          | Description                                        |
-|----------------------|------------------|----------------------------------------------------|
-| `KV_STORE_FILE`      | `kv_store.json`  | Path to the JSON file used for persistence         |
-| `KV_LOG_DIR`         | `logs`           | Directory where `kv_server.log` is written         |
-| `KV_HOST`            | `127.0.0.1`      | Bind host for `start.sh` (uvicorn `--host`)        |
-| `KV_PORT`            | `8000`           | Bind port for `start.sh` (uvicorn `--port`)        |
+| Environment variable  | Default          | Description                                             |
+|-----------------------|------------------|---------------------------------------------------------|
+| `KV_STORE_FILE`       | `kv_store.json`  | Path to the JSON file used for persistence              |
+| `KV_LOG_DIR`          | `logs`           | Directory where `kv_server.log` is written              |
+| `KV_LOG_BACKUP_COUNT` | `30`             | Number of daily log files to keep before deletion       |
+| `KV_HOST`             | `127.0.0.1`      | Bind host for `start.sh` (uvicorn `--host`)             |
+| `KV_PORT`             | `8000`           | Bind port for `start.sh` (uvicorn `--port`)             |
 
 ## API
 

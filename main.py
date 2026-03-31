@@ -2,6 +2,7 @@
 
 import json
 import logging
+import logging.handlers
 import os
 import secrets
 import threading
@@ -19,6 +20,7 @@ from pydantic import BaseModel
 DEFAULT_TTL_SECONDS: int = 4 * 60 * 60  # 4 hours
 STORE_FILE: str = os.environ.get("KV_STORE_FILE", "kv_store.json")
 LOG_DIR: str = os.environ.get("KV_LOG_DIR", "logs")
+LOG_BACKUP_COUNT: int = int(os.environ.get("KV_LOG_BACKUP_COUNT", "30"))
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -26,10 +28,22 @@ LOG_DIR: str = os.environ.get("KV_LOG_DIR", "logs")
 
 
 def _setup_logging() -> None:
-    """Add a file handler to the root logger, writing to LOG_DIR/kv_server.log."""
+    """Add a daily-rotating file handler to the root logger.
+
+    Rotates at midnight; keeps LOG_BACKUP_COUNT days of backups (default 30).
+    Rotated files are named kv_server.log.YYYY-MM-DD.
+    """
     os.makedirs(LOG_DIR, exist_ok=True)
     log_path = os.path.join(LOG_DIR, "kv_server.log")
-    handler = logging.FileHandler(log_path, encoding="utf-8")
+    handler = logging.handlers.TimedRotatingFileHandler(
+        log_path,
+        when="midnight",
+        interval=1,
+        backupCount=LOG_BACKUP_COUNT,
+        encoding="utf-8",
+        utc=False,
+    )
+    handler.suffix = "%Y-%m-%d"
     handler.setFormatter(
         logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
     )
