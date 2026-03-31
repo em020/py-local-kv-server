@@ -25,17 +25,51 @@ pip install -r requirements.txt
 
 ## Running the server
 
+### Quick start (recommended)
+
+Use the provided `start.sh` script to launch the server in the background. The script is idempotent — it does nothing if the service is already running.
+
+```bash
+chmod +x start.sh   # first time only
+./start.sh
+```
+
+Optional arguments:
+
+```bash
+./start.sh --host 0.0.0.0 --port 9000
+```
+
+Or configure via environment variables:
+
+```bash
+KV_HOST=0.0.0.0 KV_PORT=9000 ./start.sh
+```
+
+The server PID is saved to `kv_server.pid` so the script can detect a running instance on subsequent calls.
+
+### Manual start
+
 ```bash
 uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
 The interactive API docs are available at `http://127.0.0.1:8000/docs` once the server is running.
 
+## Logging
+
+Application logs are written to `logs/kv_server.log` inside the project directory. The `logs/` folder is created automatically on first run. The log destination can be changed via the `KV_LOG_DIR` environment variable.
+
+When using `start.sh`, uvicorn's own output (access logs, startup messages) is also appended to the same file.
+
 ## Configuration
 
-| Environment variable | Default          | Description                                   |
-|----------------------|------------------|-----------------------------------------------|
-| `KV_STORE_FILE`      | `kv_store.json`  | Path to the JSON file used for persistence    |
+| Environment variable | Default          | Description                                        |
+|----------------------|------------------|----------------------------------------------------|
+| `KV_STORE_FILE`      | `kv_store.json`  | Path to the JSON file used for persistence         |
+| `KV_LOG_DIR`         | `logs`           | Directory where `kv_server.log` is written         |
+| `KV_HOST`            | `127.0.0.1`      | Bind host for `start.sh` (uvicorn `--host`)        |
+| `KV_PORT`            | `8000`           | Bind port for `start.sh` (uvicorn `--port`)        |
 
 ## API
 

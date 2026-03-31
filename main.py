@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import secrets
+import threading
 import time
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -11,20 +12,43 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-logger = logging.getLogger(__name__)
-
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
 DEFAULT_TTL_SECONDS: int = 4 * 60 * 60  # 4 hours
 STORE_FILE: str = os.environ.get("KV_STORE_FILE", "kv_store.json")
+LOG_DIR: str = os.environ.get("KV_LOG_DIR", "logs")
+
+# ---------------------------------------------------------------------------
+# Logging setup
+# ---------------------------------------------------------------------------
+
+
+def _setup_logging() -> None:
+    """Add a file handler to the root logger, writing to LOG_DIR/kv_server.log."""
+    os.makedirs(LOG_DIR, exist_ok=True)
+    log_path = os.path.join(LOG_DIR, "kv_server.log")
+    handler = logging.FileHandler(log_path, encoding="utf-8")
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    )
+    root = logging.getLogger()
+    root.addHandler(handler)
+    if root.level == logging.NOTSET:
+        root.setLevel(logging.INFO)
+
+
+_setup_logging()
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # In-memory store  {key: {"value": str, "expires_at": float}}
 # ---------------------------------------------------------------------------
 
 _store: dict[str, dict] = {}
+_store_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -109,17 +133,21 @@ class RetrieveResponse(BaseModel):
 @app.post("/save_string", response_model=SaveResponse)
 def save_string(req: SaveRequest) -> SaveResponse:
     """Store a string value, generate a unique key, and return it."""
-    _evict_expired()
     ttl = req.ttl_seconds if req.ttl_seconds is not None else DEFAULT_TTL_SECONDS
     if ttl <= 0:
         raise HTTPException(status_code=400, detail="ttl_seconds must be positive")
-    key = secrets.token_urlsafe(8)
-    while key in _store:
-        key = secrets.token_urlsafe(8)
-    _store[key] = {
-        "value": req.value,
-        "expires_at": time.time() + ttl,
-    }
+    with _store_lock:
+        _evict_expired()
+        for _ in range(10):
+            key = secrets.token_urlsafe(8)
+            if key not in _store:
+                break
+        else:
+            raise HTTPException(status_code=503, detail="Could not generate a unique key")
+        _store[key] = {
+            "value": req.value,
+            "expires_at": time.time() + ttl,
+        }
     _save_store()
     return SaveResponse(key=key, status="ok")
 
