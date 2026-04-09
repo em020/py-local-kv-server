@@ -26,6 +26,8 @@ LOG_BACKUP_COUNT: int = int(os.environ.get("KV_LOG_BACKUP_COUNT", "30"))
 # Logging setup
 # ---------------------------------------------------------------------------
 
+_LOG_FORMATTER = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+
 
 def _setup_logging() -> None:
     """Add a daily-rotating file handler to the root logger.
@@ -44,13 +46,24 @@ def _setup_logging() -> None:
         utc=False,
     )
     handler.suffix = "%Y-%m-%d"
-    handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-    )
+    handler.setFormatter(_LOG_FORMATTER)
     root = logging.getLogger()
     root.addHandler(handler)
     if root.level == logging.NOTSET:
         root.setLevel(logging.INFO)
+
+
+def _apply_timestamp_formatter_to_uvicorn() -> None:
+    """Stamp the shared formatter onto every handler that uvicorn registered.
+
+    Uvicorn configures its own loggers (uvicorn, uvicorn.error, uvicorn.access)
+    after module import, so their handlers have no timestamp by default.  This
+    must be called from the lifespan hook, after uvicorn has finished its own
+    logging setup.
+    """
+    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        for handler in logging.getLogger(name).handlers:
+            handler.setFormatter(_LOG_FORMATTER)
 
 
 _setup_logging()
@@ -113,6 +126,7 @@ def _is_expired(entry: dict) -> bool:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _apply_timestamp_formatter_to_uvicorn()
     _load_store()
     yield
 
