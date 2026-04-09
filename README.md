@@ -40,13 +40,20 @@ Optional arguments:
 ./start.sh --host 0.0.0.0 --port 9000
 ```
 
+To restart the background server with the same PID-file management, use:
+
+```bash
+./restart.sh
+./restart.sh --host 0.0.0.0 --port 9000
+```
+
 Or configure via environment variables:
 
 ```bash
 KV_HOST=0.0.0.0 KV_PORT=9000 ./start.sh
 ```
 
-The server PID is saved to `kv_server.pid` so the script can detect a running instance on subsequent calls.
+The server PID is saved to `kv_server.pid` so the scripts can detect and restart the managed instance.
 
 ### Manual start
 

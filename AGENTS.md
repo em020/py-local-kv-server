@@ -10,7 +10,7 @@ Install runtime dependencies with `pip install -r requirements.txt`.
 
 Run the server in the foreground with `uvicorn main:app --host 127.0.0.1 --port 8000`.
 
-Use `./start.sh` for the idempotent background launcher. Example: `./start.sh --host 0.0.0.0 --port 9000`.
+Use `./start.sh` for the idempotent background launcher. Example: `./start.sh --host 0.0.0.0 --port 9000`. Use `./restart.sh` to stop the PID-managed instance and start it again with the same optional flags.
 
 Install test-only dependencies with `pip install pytest httpx`, then run `pytest tests/`. For a focused check, use `pytest tests/test_main.py::test_save_string_returns_ok`.
 
