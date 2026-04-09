@@ -209,3 +209,6 @@ logs/*.log
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+/.idea
+kv_store.json
