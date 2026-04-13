@@ -1,29 +1,25 @@
 from fastapi import APIRouter, Depends
 
-from app.api.dependencies import get_current_user
-from app.core.schemas.base import User
 from app.domain.kv.dependencies import get_kv_service
 from app.domain.kv.schemas import RetrieveResponse, SaveRequest, SaveResponse
 from app.domain.kv.services import KVService
 
-router = APIRouter(prefix="/kv/api/v1", tags=["KV v1"])
+router = APIRouter(tags=["KV legacy"])
 
 
 @router.post("/save_string", response_model=SaveResponse)
 async def save_string(
     req: SaveRequest,
-    user: User = Depends(get_current_user),
     service: KVService = Depends(get_kv_service),
 ) -> SaveResponse:
-    """Store a string value and return a generated key."""
+    """Legacy unauthenticated save endpoint."""
     return service.save_string(req.value, req.ttl_seconds)
 
 
 @router.get("/retrieve_string", response_model=RetrieveResponse)
 async def retrieve_string(
     key: str,
-    user: User = Depends(get_current_user),
     service: KVService = Depends(get_kv_service),
 ) -> RetrieveResponse:
-    """Retrieve a previously stored string by key."""
+    """Legacy unauthenticated retrieve endpoint."""
     return service.retrieve_string(key)

@@ -24,7 +24,7 @@ async def kv_domain_exception_handler(request: Request, exc: KVBaseException):
     and returns a consistent JSON structure.
     """
     return JSONResponse(
-        status_code=400,
+        status_code=exc.status_code,
         content={
             "error": {
                 "code": exc.code,  # e.g., "KV_LIMIT_EXCEEDED"

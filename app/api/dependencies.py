@@ -1,4 +1,3 @@
-from typing import Generator
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 
@@ -21,7 +20,7 @@ from app.core.schemas.base import User
 #     finally:
 #         db.close()
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 # 2. Auth Dependency
 async def get_current_user(

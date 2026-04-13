@@ -44,7 +44,7 @@ mkdir -p "$LOG_DIR"
 echo "Starting KV server on $HOST:$PORT ..."
 cd "$SCRIPT_DIR"
 
-nohup uvicorn main:app \
+nohup uvicorn app.main:app \
     --host "$HOST" \
     --port "$PORT" \
     >> "$LOG_FILE" 2>&1 &

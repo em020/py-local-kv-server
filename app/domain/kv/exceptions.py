@@ -4,6 +4,30 @@ from app.core.exceptions import AppBaseException
 class KVBaseException(AppBaseException):
     """Base for all KV-related errors"""
     code = "KV_ERROR"
+    status_code = 400
+
+
+class KVInvalidTTLError(KVBaseException):
+    code = "KV_INVALID_TTL"
+
+    def __init__(self):
+        super().__init__("ttl_seconds must be positive")
+
+
+class KVKeyNotFoundError(KVBaseException):
+    code = "KV_KEY_NOT_FOUND"
+    status_code = 404
+
+    def __init__(self, key: str):
+        super().__init__(f"Key '{key}' not found")
+
+
+class KVKeyGenerationError(KVBaseException):
+    code = "KV_KEY_GENERATION_FAILED"
+    status_code = 503
+
+    def __init__(self):
+        super().__init__("Could not generate a unique key")
 
 
 # class KVStorageLimitReachedError(KVBaseException):

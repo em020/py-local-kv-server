@@ -1,6 +1,6 @@
 # py-local-kv-server
 
-A minimalist local key-value (KV) HTTP server built with [FastAPI](https://fastapi.tiangolo.com/). Store string values over HTTP and get back a server-generated short unique key to retrieve them later, with optional TTL-based expiry and automatic JSON persistence across restarts.
+A minimalist FastAPI key-value service with a package-based `app/` layout, JSON file persistence, TTL expiry, and both legacy and versioned HTTP routes.
 
 ## Features
 
@@ -27,7 +27,7 @@ pip install -r requirements.txt
 
 ### Quick start (recommended)
 
-Use the provided `start.sh` script to launch the server in the background. The script is idempotent — it does nothing if the service is already running.
+Use the provided `start.sh` script to launch the server in the background. The script is idempotent and does nothing if the service is already running.
 
 ```bash
 chmod +x start.sh   # first time only
@@ -47,6 +47,12 @@ To restart the background server with the same PID-file management, use:
 ./restart.sh --host 0.0.0.0 --port 9000
 ```
 
+To stop the managed instance:
+
+```bash
+./stop.sh
+```
+
 Or configure via environment variables:
 
 ```bash
@@ -58,7 +64,7 @@ The server PID is saved to `kv_server.pid` so the scripts can detect and restart
 ### Manual start
 
 ```bash
-uvicorn main:app --host 127.0.0.1 --port 8000
+uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 The interactive API docs are available at `http://127.0.0.1:8000/docs` once the server is running.
@@ -82,6 +88,11 @@ When using `start.sh`, uvicorn's own output (access logs, startup messages) is a
 | `KV_PORT`             | `8000`           | Bind port for `start.sh` (uvicorn `--port`)             |
 
 ## API
+
+Two route families are available:
+
+- Legacy compatibility routes at `/save_string` and `/retrieve_string` with no auth header required
+- Versioned routes at `/bigsister/kv/api/v1/save_string` and `/bigsister/kv/api/v1/retrieve_string` requiring `Authorization: Bearer <token>`
 
 ### `POST /save_string`
 
@@ -109,6 +120,15 @@ curl -X POST http://127.0.0.1:8000/save_string \
 ```
 
 Use the returned `key` to retrieve the value later.
+
+Equivalent authenticated version:
+
+```bash
+curl -X POST http://127.0.0.1:8000/bigsister/kv/api/v1/save_string \
+  -H "Authorization: Bearer dev-token" \
+  -H "Content-Type: application/json" \
+  -d '{"value": "hello", "ttl_seconds": 3600}'
+```
 
 ---
 
