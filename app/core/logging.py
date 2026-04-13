@@ -31,8 +31,7 @@ def setup_logging() -> None:
     handler.suffix = "%Y-%m-%d"
     handler.setFormatter(LOG_FORMATTER)
     root.addHandler(handler)
-    if root.level == logging.NOTSET:
-        root.setLevel(logging.INFO)
+    root.setLevel(logging.INFO)
 
 
 def apply_timestamp_formatter_to_uvicorn() -> None:

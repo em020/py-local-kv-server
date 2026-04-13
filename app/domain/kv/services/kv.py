@@ -1,3 +1,4 @@
+import logging
 import secrets
 import time
 
@@ -8,6 +9,8 @@ from app.domain.kv.exceptions import (
 )
 from app.domain.kv.repositories import KVRecord, KVRepository
 from app.domain.kv.schemas import RetrieveResponse, SaveResponse
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_TTL_SECONDS: int = 4 * 60 * 60

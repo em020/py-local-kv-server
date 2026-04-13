@@ -6,11 +6,13 @@ import tempfile
 import time
 
 import pytest
+from fastapi import Depends
 from fastapi.testclient import TestClient
 
 # Point persistence file to a temp location so tests don't touch real data.
 os.environ["KV_STORE_FILE"] = os.path.join(tempfile.gettempdir(), "test_kv_store.json")
 
+from app.api.dependencies import get_current_user  # noqa: E402
 from app.domain.kv.repositories import FileKVRepository, KVRecord  # noqa: E402
 from app.domain.kv.services import DEFAULT_TTL_SECONDS  # noqa: E402
 from app.main import create_app  # noqa: E402
@@ -183,3 +185,35 @@ def test_persistence_expired_entries_not_loaded():
         repository = client.app.state.kv_service.repository
         assert isinstance(repository, FileKVRepository)
         assert "gone" not in repository.snapshot()
+
+
+def test_kv_exception_handler_logs_error(client, caplog):
+    caplog.set_level("ERROR")
+
+    resp = client.get(RETRIEVE_PATH, params={"key": "missing"}, headers=AUTH_HEADERS)
+
+    assert resp.status_code == 404
+    assert "KV domain error on GET /bigsister/kv/api/v1/retrieve_string [KV_KEY_NOT_FOUND]" in caplog.text
+
+
+def test_uncaught_exception_returns_500_and_logs_traceback(caplog):
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: None
+
+    @app.get("/boom")
+    async def boom(_: object = Depends(get_current_user)):
+        raise RuntimeError("boom")
+
+    caplog.set_level("ERROR")
+
+    with TestClient(app, raise_server_exceptions=False) as client:
+        resp = client.get("/boom", headers=AUTH_HEADERS)
+
+    assert resp.status_code == 500
+    assert resp.json() == {
+        "detail": "Internal server error",
+        "code": "INTERNAL_SERVER_ERROR",
+    }
+    assert "Unhandled exception on GET /boom" in caplog.text
+    assert "Traceback" in caplog.text
+    assert "RuntimeError: boom" in caplog.text
