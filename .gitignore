@@ -203,7 +203,7 @@ cython_debug/
 
 # KV server runtime files
 kv_server.pid
-logs/*.log
+logs/*.log*
 
 # Marimo
 marimo/_static/

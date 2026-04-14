@@ -1,9 +1,11 @@
 """Tests for the local KV HTTP service."""
 
+import importlib
 import json
 import os
 import tempfile
 import time
+from pathlib import Path
 
 import pytest
 from fastapi import Depends
@@ -13,6 +15,9 @@ from fastapi.testclient import TestClient
 os.environ["KV_STORE_FILE"] = os.path.join(tempfile.gettempdir(), "test_kv_store.json")
 
 from app.api.dependencies import get_current_user  # noqa: E402
+from app.core import config as config_module  # noqa: E402
+from app.core.config import settings  # noqa: E402
+from app.core.logging import build_logging_config  # noqa: E402
 from app.domain.kv.repositories import FileKVRepository, KVRecord  # noqa: E402
 from app.domain.kv.services import DEFAULT_TTL_SECONDS  # noqa: E402
 from app.main import create_app  # noqa: E402
@@ -23,6 +28,7 @@ SAVE_PATH = "/bigsister/kv/api/v1/save_string"
 RETRIEVE_PATH = "/bigsister/kv/api/v1/retrieve_string"
 LEGACY_SAVE_PATH = "/save_string"
 LEGACY_RETRIEVE_PATH = "/retrieve_string"
+LOG_FILE_PATH = os.path.join(settings.kv_log_dir, "kv_server.log")
 
 
 @pytest.fixture(autouse=True)
@@ -187,16 +193,18 @@ def test_persistence_expired_entries_not_loaded():
         assert "gone" not in repository.snapshot()
 
 
-def test_kv_exception_handler_logs_error(client, caplog):
-    caplog.set_level("ERROR")
-
+def test_kv_exception_handler_logs_error(client):
+    before_size = os.path.getsize(LOG_FILE_PATH) if os.path.exists(LOG_FILE_PATH) else 0
     resp = client.get(RETRIEVE_PATH, params={"key": "missing"}, headers=AUTH_HEADERS)
+    with open(LOG_FILE_PATH, "r", encoding="utf-8") as fh:
+        fh.seek(before_size)
+        log_output = fh.read()
 
     assert resp.status_code == 404
-    assert "KV domain error on GET /bigsister/kv/api/v1/retrieve_string [KV_KEY_NOT_FOUND]" in caplog.text
+    assert "KV domain error on GET /bigsister/kv/api/v1/retrieve_string [KV_KEY_NOT_FOUND]" in log_output
 
 
-def test_uncaught_exception_returns_500_and_logs_traceback(caplog):
+def test_uncaught_exception_returns_500_and_logs_traceback():
     app = create_app()
     app.dependency_overrides[get_current_user] = lambda: None
 
@@ -204,16 +212,58 @@ def test_uncaught_exception_returns_500_and_logs_traceback(caplog):
     async def boom(_: object = Depends(get_current_user)):
         raise RuntimeError("boom")
 
-    caplog.set_level("ERROR")
-
+    before_size = os.path.getsize(LOG_FILE_PATH) if os.path.exists(LOG_FILE_PATH) else 0
     with TestClient(app, raise_server_exceptions=False) as client:
         resp = client.get("/boom", headers=AUTH_HEADERS)
+    with open(LOG_FILE_PATH, "r", encoding="utf-8") as fh:
+        fh.seek(before_size)
+        log_output = fh.read()
 
     assert resp.status_code == 500
     assert resp.json() == {
         "detail": "Internal server error",
         "code": "INTERNAL_SERVER_ERROR",
     }
-    assert "Unhandled exception on GET /boom" in caplog.text
-    assert "Traceback" in caplog.text
-    assert "RuntimeError: boom" in caplog.text
+    assert "Unhandled exception on GET /boom" in log_output
+    assert "Traceback" in log_output
+    assert "RuntimeError: boom" in log_output
+
+
+def test_kv_log_dir_defaults_to_project_root(monkeypatch):
+    monkeypatch.delenv("KV_LOG_DIR", raising=False)
+    reloaded_config = importlib.reload(config_module)
+
+    try:
+        expected = str(Path(reloaded_config.__file__).resolve().parents[2] / "logs")
+        assert reloaded_config.settings.kv_log_dir == expected
+    finally:
+        importlib.reload(config_module)
+
+
+def test_kv_log_dir_relative_env_is_resolved_from_project_root(monkeypatch):
+    monkeypatch.setenv("KV_LOG_DIR", "runtime_logs")
+    reloaded_config = importlib.reload(config_module)
+
+    try:
+        expected = str(Path(reloaded_config.__file__).resolve().parents[2] / "runtime_logs")
+        assert reloaded_config.settings.kv_log_dir == expected
+    finally:
+        monkeypatch.delenv("KV_LOG_DIR", raising=False)
+        importlib.reload(config_module)
+
+
+def test_logging_config_wires_daily_rotation_for_app_and_uvicorn():
+    config = build_logging_config()
+
+    assert config["disable_existing_loggers"] is False
+    assert config["handlers"]["console"]["class"] == "logging.StreamHandler"
+    assert config["handlers"]["file_daily"]["class"] == "logging.handlers.TimedRotatingFileHandler"
+    assert config["handlers"]["file_daily"]["when"] == "midnight"
+    assert config["handlers"]["file_daily"]["interval"] == 1
+    assert config["handlers"]["file_daily"]["backupCount"] == 30
+    assert config["root"]["handlers"] == ["console", "file_daily"]
+    assert config["root"]["level"] == "INFO"
+
+    for logger_name in ("app", "uvicorn", "uvicorn.error", "uvicorn.access"):
+        assert config["loggers"][logger_name]["level"] == "INFO"
+        assert config["loggers"][logger_name]["propagate"] is True

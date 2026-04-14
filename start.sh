@@ -7,7 +7,7 @@
 # Defaults: host=127.0.0.1  port=8000
 #
 # The script is idempotent: it does nothing if the service is already running.
-# Logs (uvicorn + application) are appended to logs/kv_server.log.
+# Logs are written by the application's logging configuration to logs/kv_server.log.
 
 set -euo pipefail
 
@@ -16,7 +16,6 @@ HOST="${KV_HOST:-127.0.0.1}"
 PORT="${KV_PORT:-8000}"
 PID_FILE="$SCRIPT_DIR/kv_server.pid"
 LOG_DIR="$SCRIPT_DIR/logs"
-LOG_FILE="$LOG_DIR/kv_server.log"
 
 # Parse optional --host / --port arguments
 while [[ $# -gt 0 ]]; do
@@ -47,8 +46,8 @@ cd "$SCRIPT_DIR"
 nohup uvicorn app.main:app \
     --host "$HOST" \
     --port "$PORT" \
-    >> "$LOG_FILE" 2>&1 &
+    > /dev/null 2>&1 &
 
 echo $! > "$PID_FILE"
 echo "KV server started (PID $(cat "$PID_FILE"))."
-echo "Logs: $LOG_FILE"
+echo "Logs: $LOG_DIR/kv_server.log"
