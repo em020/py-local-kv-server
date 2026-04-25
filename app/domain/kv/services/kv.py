@@ -13,7 +13,7 @@ from app.domain.kv.schemas import RetrieveResponse, SaveResponse
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_TTL_SECONDS: int = 4 * 60 * 60
+DEFAULT_TTL_SECONDS: int = 365 * 24 * 60 * 60
 
 
 class KVService:
